@@ -25,6 +25,18 @@ export const applicationApprovalStatus = pgEnum('application_approval_status', [
   'REMOVED',
 ]);
 
+export const reportTargetType = pgEnum('report_target_type', ['application', 'review']);
+
+export const reportReason = pgEnum('report_reason', [
+  'spam',
+  'inappropriate',
+  'misleading',
+  'offensive',
+  'other',
+]);
+
+export const reportStatus = pgEnum('report_status', ['pending', 'reviewed', 'resolved', 'dismissed']);
+
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -149,6 +161,7 @@ export const verification = pgTable('verification', {
 export const rating = pgTable(
   'rating',
   {
+    id: serial('id').notNull(),
     userId: text('user_id').notNull(),
     applicationId: integer('application_id').notNull(),
     comment: varchar({ length: 255 }),
@@ -160,6 +173,7 @@ export const rating = pgTable(
       columns: [table.userId, table.applicationId],
       name: 'rating_pkey',
     }),
+    unique('rating_id_unq').on(table.id),
     foreignKey({
       columns: [table.userId],
       foreignColumns: [user.id],
@@ -229,5 +243,41 @@ export const applicationClaimRequest = pgTable(
       foreignColumns: [user.id],
       name: 'claim_request_user_id_fkey',
     }).onDelete('cascade'),
+  ],
+);
+
+export const report = pgTable(
+  'report',
+  {
+    id: serial().primaryKey().notNull(),
+    reporterId: text('reporter_id').notNull(),
+    targetType: reportTargetType('target_type').notNull(),
+    targetId: integer('target_id').notNull(),
+    reason: reportReason('reason').notNull(),
+    description: text('description'),
+    status: reportStatus('status').default('pending').notNull(),
+    adminNote: text('admin_note'),
+    reviewedBy: text('reviewed_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique('report_reporter_target_unq').on(table.reporterId, table.targetType, table.targetId),
+    index('report_reporter_id_idx').on(table.reporterId),
+    index('report_target_type_idx').on(table.targetType),
+    index('report_status_idx').on(table.status),
+    foreignKey({
+      columns: [table.reporterId],
+      foreignColumns: [user.id],
+      name: 'report_reporter_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.reviewedBy],
+      foreignColumns: [user.id],
+      name: 'report_reviewed_by_fkey',
+    }).onDelete('set null'),
   ],
 );
