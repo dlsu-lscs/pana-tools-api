@@ -10,12 +10,14 @@ const pool = new Pool({
 });
 const db = drizzle({ client: pool, relations });
 
-try {
-  await db.execute('SELECT 1');
-  logger.info('Database connection verified successfully.');
-} catch (error) {
-  logger.error('Failed to connect to the database.', { error });
-  throw error;
-}
+export const verifyDatabaseConnection = async () => {
+  try {
+    await db.execute('SELECT 1');
+    logger.info('Database connection verified successfully.');
+  } catch (error) {
+    logger.error('Failed to connect to the database.', { error });
+    throw error;
+  }
+};
 
 export { db, pool };
