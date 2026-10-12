@@ -1,4 +1,4 @@
-import { and, eq, count } from 'drizzle-orm';
+import { and, eq, count, desc } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
 import {
@@ -11,8 +11,10 @@ import {
   type AdminReportsListResponse,
 } from './dto/index.js';
 import type { CreateReportRequest, AdminReportsQuery, UpdateReportRequest } from './dto/index.js';
-import { application, rating, report, user, type SelectReport } from './report.model.js';
-
+import { report, type SelectReport } from './report.model.js';
+import { application } from '@/applications/application.model.js';
+import { rating } from '@/ratings/rating.model.js';
+import { user } from '@/users/user.model.js';
 export interface IReportService {
   createReport(reporterId: string, payload: CreateReportRequest): Promise<ReportResponse>;
   checkReport(
@@ -92,23 +94,6 @@ export default class ReportService implements IReportService {
       throw new HttpError(403, 'You cannot report your own content', 'FORBIDDEN');
     }
 
-    // Check for duplicate
-    const [existing] = await this.db
-      .select({ id: report.id })
-      .from(report)
-      .where(
-        and(
-          eq(report.reporterId, reporterId),
-          eq(report.targetType, targetType),
-          eq(report.targetId, targetId),
-        ),
-      )
-      .limit(1);
-
-    if (existing) {
-      throw new HttpError(409, 'You have already reported this content', 'DUPLICATE_REPORT');
-    }
-
     const [created] = await this.db
       .insert(report)
       .values({
@@ -118,7 +103,13 @@ export default class ReportService implements IReportService {
         reason,
         description: description ?? null,
       })
+      .onConflictDoNothing()
       .returning();
+      
+
+    if (!created) {
+      throw new HttpError(409, 'You have already reported this content', 'DUPLICATE_REPORT');
+    }
 
     return ReportResponseSchema.parse(created);
   };
@@ -199,7 +190,8 @@ export default class ReportService implements IReportService {
         .innerJoin(user, eq(report.reporterId, user.id))
         .where(whereClause)
         .limit(limit)
-        .offset(offset),
+        .offset(offset)
+        .orderBy(desc(report.createdAt)),
       this.db
         .select({ total: count() })
         .from(report)
@@ -224,14 +216,16 @@ export default class ReportService implements IReportService {
     // Verify report exists
     await this.getReportById(id);
 
+    const updateData = {
+      reviewedBy: adminId,
+      updatedAt: new Date(),
+      ...(payload.status !== undefined ? { status: payload.status } : {}),
+      ...(payload.adminNote !== undefined ? { adminNote: payload.adminNote } : {})
+    } 
+
     const [updated] = await this.db
       .update(report)
-      .set({
-        status: payload.status,
-        adminNote: payload.adminNote ?? null,
-        reviewedBy: adminId,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(report.id, id))
       .returning();
 

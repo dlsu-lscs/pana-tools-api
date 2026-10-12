@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "dd5e2503-7f0b-43fd-a40c-75469df037c6",
+  "id": "573b2fa6-7504-44dd-94f3-3f0519e135fe",
   "prevIds": [
-    "a8c1e7ea-605b-4a89-bbe6-d27cac229354"
+    "7b792a2a-651b-4be1-8f0c-e9ca2bbc46e1"
   ],
   "ddl": [
     {
@@ -1071,6 +1071,32 @@
       "generated": null,
       "identity": null,
       "name": "ban_expires",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "tos_accepted",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "tos_accepted_at",
       "entityType": "columns",
       "schema": "public",
       "table": "user"

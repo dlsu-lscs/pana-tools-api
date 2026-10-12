@@ -5,7 +5,8 @@ export const UpdateReportRequestSchema = z
   .object({
     status: z
       .enum(['pending', 'reviewed', 'resolved', 'dismissed'])
-      .openapi({ example: 'resolved' }),
+      .openapi({ example: 'resolved' })
+      .optional(),
     adminNote: z
       .string()
       .trim()
@@ -14,7 +15,11 @@ export const UpdateReportRequestSchema = z
       .optional()
       .nullable()
       .openapi({ example: 'Reviewed and confirmed spam content.' }),
-  })
+  }).refine((data) => data.status !== undefined || data.adminNote !== undefined, 
+    {
+      message: "At least status or adminNote must be modified."
+    }
+  )
   .openapi('UpdateReportRequest');
 
 export type UpdateReportRequest = z.infer<typeof UpdateReportRequestSchema>;

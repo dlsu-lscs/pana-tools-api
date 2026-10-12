@@ -4,7 +4,10 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { PGlite } from '@electric-sql/pglite';
 import { createTestDatabase } from '@/shared/config/test-database.js';
 import ReportService from '../report.service.js';
-import { application, rating, report, user } from '../report.model.js';
+import { report } from '../report.model.js';
+import { application } from '@/applications/application.model.js';
+import { user } from '@/users/user.model.js';
+import { rating } from '@/ratings/rating.model.js';
 
 describe('ReportService', () => {
   let service: ReportService;
