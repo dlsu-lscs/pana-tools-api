@@ -14,7 +14,7 @@ type RatingWithUserEmail = RatingResponse;
 
 type ApplicationRating = ApplicationRatingResponse;
 
-type RatingWithApplication = Omit<SelectRating, 'userId'> & {
+type RatingWithApplication = Omit<SelectRating, 'id' | 'userId'> & {
   userId: string | null;
   application: Pick<SelectApplication, 'id' | 'slug' | 'title'>;
 };
