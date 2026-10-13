@@ -2,13 +2,13 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, count, eq } from 'drizzle-orm';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
 import {
+  application,
   InsertFavorite,
   SelectFavorite,
+  user,
   userFavorite,
 } from './favorites.model.js';
 
-import { application } from '@/applications/application.model.js';
-import { user } from '@/users/user.model.js';
 /**
  * Service result type for favorites list
  */

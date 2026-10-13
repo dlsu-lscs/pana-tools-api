@@ -4,9 +4,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { PGlite } from '@electric-sql/pglite';
 import { createTestDatabase } from '@/shared/config/test-database.js';
 import RatingsService from '../rating.service.js';
-import { rating } from '../rating.model.js';
-import { application } from '@/applications/application.model.js';
-import { user } from '@/users/user.model.js';
+import { application, rating, user } from '../rating.model.js';
 
 describe('RatingsService', () => {
   let service: RatingsService;

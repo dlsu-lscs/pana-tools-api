@@ -30,12 +30,12 @@ import { APPLICATION_CONSTANTS } from './application.constants.js';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
+  userFavorite,
   application,
+  user,
+  rating,
   applicationClaimRequest,
 } from './application.model.js';
-import { userFavorite } from '@/favorites/favorites.model.js';
-import { user } from '@/users/user.model.js';
-import { rating } from '@/ratings/rating.model.js';
 import type { ReviewApplicationRequest } from './dto/review-application-request.dto.js';
 import { getDbErrorMessage } from '@/shared/utils/dbErrorUtils.js';
 import { assertOwnershipOrAdmin } from '../shared/utils/auth.utils.js';

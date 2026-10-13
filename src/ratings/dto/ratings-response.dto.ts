@@ -3,7 +3,6 @@ import '@/shared/config/openapi.js';
 
 export const RatingResponseSchema = z
   .object({
-    id: z.coerce.number().int().positive().openapi({ example: 1 }),
     applicationId: z.coerce.number().int().positive().openapi({ example: 42 }),
     score: z.coerce.number().min(0).max(5).openapi({ example: 4.5 }),
     comment: z.string().nullable().openapi({ example: 'Highly recommended' }),
@@ -32,7 +31,6 @@ export const UserRatingApplicationSchema = z
 
 export const UserRatingItemSchema = z
   .object({
-    id: z.coerce.number().int().positive().openapi({ example: 1 }),
     userId: z.string().nullable().openapi({ example: 'user_123' }),
     applicationId: z.coerce.number().int().positive().openapi({ example: 42 }),
     score: z.coerce.number().min(0).max(5).openapi({ example: 4.5 }),

@@ -4,9 +4,7 @@ import { PgliteDatabase } from 'drizzle-orm/pglite';
 import { PGlite } from '@electric-sql/pglite';
 import { createTestDatabase } from '@/shared/config/test-database.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { userFavorite } from '../favorites.model.js';
-import { application } from '@/applications/application.model.js';
-import { user } from '@/users/user.model.js';
+import { application, user, userFavorite } from '../favorites.model.js';
 
 describe('FavoritesService', () => {
   let service: FavoritesService;

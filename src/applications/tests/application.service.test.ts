@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import ApplicationService from '../application.service.js';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
-import { application } from '../application.model.js';
-import { user } from '@/users/user.model.js';
+import { application, user } from '../application.model.js';
 import type { InsertApplication } from '../application.model.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { createTestDatabase } from '@/shared/config/test-database.js';
