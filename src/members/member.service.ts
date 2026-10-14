@@ -205,7 +205,7 @@ export default class MemberService implements IMemberService {
       throw new HttpError(403, 'You cannot demote yourself', 'FORBIDDEN');
     }
     await this.assertUserExists(targetUserId);
-    await this.db.update(user).set({ role: null }).where(eq(user.id, targetUserId));
+    await this.db.update(user).set({ role: 'user' }).where(eq(user.id, targetUserId));
   };
 
   private buildWhereConditions(filters?: MembersListFilters) {
