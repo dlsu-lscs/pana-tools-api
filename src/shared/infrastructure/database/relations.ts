@@ -1,5 +1,5 @@
 import { defineRelations } from 'drizzle-orm';
-import { application, user, rating, userFavorite, session, account } from './schema.js';
+import { application, user, rating, userFavorite, session, account, report } from './schema.js';
 
 export const relations = defineRelations(
   {
@@ -9,6 +9,7 @@ export const relations = defineRelations(
     user,
     session,
     account,
+    report,
   },
   (r) => ({
     application: {
@@ -45,6 +46,7 @@ export const relations = defineRelations(
       applications: r.many.application(),
       rating: r.many.rating(),
       userFavorite: r.many.userFavorite(),
+      reports: r.many.report(),
     },
     session: {
       user: r.one.user({
@@ -55,6 +57,12 @@ export const relations = defineRelations(
     account: {
       user: r.one.user({
         from: r.account.userId,
+        to: r.user.id,
+      }),
+    },
+    report: {
+      reporter: r.one.user({
+        from: r.report.reporterId,
         to: r.user.id,
       }),
     },

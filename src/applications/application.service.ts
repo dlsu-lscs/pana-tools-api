@@ -30,12 +30,12 @@ import { APPLICATION_CONSTANTS } from './application.constants.js';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
-  userFavorite,
   application,
-  user,
-  rating,
   applicationClaimRequest,
 } from './application.model.js';
+import { userFavorite } from '@/favorites/favorites.model.js';
+import { user } from '@/users/user.model.js';
+import { rating } from '@/ratings/rating.model.js';
 import type { ReviewApplicationRequest } from './dto/review-application-request.dto.js';
 import { getDbErrorMessage } from '@/shared/utils/dbErrorUtils.js';
 import { assertOwnershipOrAdmin } from '../shared/utils/auth.utils.js';
@@ -60,7 +60,7 @@ export interface IApplicationService {
     id: number,
     updates: PatchApplicationRequest,
     actorUserId: string,
-    role: string
+    role: string,
   ): Promise<string>;
   reviewAdminApplicationById(id: number, input: ReviewApplicationRequest): Promise<void>;
   deleteApplicationById(id: number, actorUserId: string): Promise<void>;
@@ -83,10 +83,11 @@ export interface IApplicationService {
   ): Promise<void>;
   getAdminClaimRequests(query: AdminClaimsListQuery): Promise<ClaimRequestsListResponse>;
   reviewAdminClaimRequest(claimId: number, input: ReviewClaimRequest): Promise<void>;
+  incrementViewCount(slug: string): Promise<void>;
 }
 
 export default class ApplicationService implements IApplicationService {
-  constructor(private readonly db: NodePgDatabase) {}
+  constructor(private readonly db: NodePgDatabase) { }
 
   getPaginatedApplications = async (
     limit: number = APPLICATION_CONSTANTS.DEFAULT_LIMIT,
@@ -119,10 +120,10 @@ export default class ApplicationService implements IApplicationService {
     const statusCondition = filters?.status
       ? eq(application.status, filters.status)
       : or(
-          eq(application.status, 'PENDING'),
-          eq(application.status, 'CHANGES_REQUESTED'),
-          eq(application.status, 'REMOVED'),
-        )!;
+        eq(application.status, 'PENDING'),
+        eq(application.status, 'CHANGES_REQUESTED'),
+        eq(application.status, 'REMOVED'),
+      )!;
 
     return this.getFilteredApplications(limit, page, filters, statusCondition);
   };
@@ -173,24 +174,45 @@ export default class ApplicationService implements IApplicationService {
       );
     }
 
-    let orderByColumn:
-      | typeof application.createdAt
-      | typeof application.updatedAt
-      | typeof application.title;
+    // Popularity & standard sort expressions
+    const favoritesCountExpr = sql`count(distinct ${userFavorite.userId})`;
+    const ratingCountExpr = sql`count(distinct ${rating.userId})`;
+    const avgRatingExpr = sql`avg(${rating.score})`;
+
+    let orderByClause: SQL;
     switch (sortBy) {
       case 'title':
-        orderByColumn = application.title;
+        orderByClause = sortOrder === 'asc' ? asc(application.title) : desc(application.title);
         break;
       case 'updatedAt':
-        orderByColumn = application.updatedAt;
+        orderByClause = sortOrder === 'asc' ? asc(application.updatedAt) : desc(application.updatedAt);
+        break;
+      case 'viewCount':
+        orderByClause = sortOrder === 'asc' ? asc(application.viewCount) : desc(application.viewCount);
+        break;
+      case 'favoritesCount':
+        orderByClause =
+          sortOrder === 'asc'
+            ? sql`${favoritesCountExpr} ASC, ${application.id} ASC`
+            : sql`${favoritesCountExpr} DESC, ${application.id} DESC`;
+        break;
+      case 'ratingCount':
+        orderByClause =
+          sortOrder === 'asc'
+            ? sql`${ratingCountExpr} ASC, ${application.id} ASC`
+            : sql`${ratingCountExpr} DESC, ${application.id} DESC`;
+        break;
+      case 'averageRating':
+        orderByClause =
+          sortOrder === 'asc'
+            ? sql`${avgRatingExpr} ASC NULLS FIRST, ${application.id} ASC`
+            : sql`${avgRatingExpr} DESC NULLS LAST, ${application.id} DESC`;
         break;
       case 'createdAt':
       default:
-        orderByColumn = application.createdAt;
+        orderByClause = sortOrder === 'asc' ? asc(application.createdAt) : desc(application.createdAt);
         break;
     }
-
-    const orderByClause = sortOrder === 'asc' ? asc(orderByColumn) : desc(orderByColumn);
 
     const whereClause = and(...conditions);
 
@@ -228,6 +250,20 @@ export default class ApplicationService implements IApplicationService {
         totalPages,
       },
     };
+  };
+
+  incrementViewCount = async (slug: string): Promise<void> => {
+    const [result] = await this.db
+      .update(application)
+      .set({
+        viewCount: sql`${application.viewCount} + 1`,
+      })
+      .where(and(eq(application.slug, slug), eq(application.status, 'APPROVED')))
+      .returning({ id: application.id });
+
+    if (!result) {
+      throw new HttpError(404, 'Application not found', 'NOT_FOUND');
+    }
   };
 
   getApplicationBySlug = async (slug: string): Promise<ApplicationResponse> => {
@@ -282,8 +318,22 @@ export default class ApplicationService implements IApplicationService {
   };
 
   createApplication = async (app: CreateApplicationRequest, actorUserId: string): Promise<void> => {
-    if (!(await this.userExists(actorUserId))) {
+    const [existingUser] = await this.db
+      .select({ id: user.id, tosAccepted: user.tosAccepted })
+      .from(user)
+      .where(eq(user.id, actorUserId))
+      .limit(1);
+
+    if (!existingUser) {
       throw new HttpError(404, 'User not found', 'NOT_FOUND');
+    }
+
+    if (!existingUser.tosAccepted) {
+      throw new HttpError(
+        403,
+        'You must accept the Terms of Service before submitting an application',
+        'TOS_NOT_ACCEPTED',
+      );
     }
 
     if (await this.slugExists(app.slug)) {
@@ -295,18 +345,16 @@ export default class ApplicationService implements IApplicationService {
       userId: actorUserId,
       status: 'PENDING',
       rejectionReason: null,
+      viewCount: 0,
     });
-
-    return;
   };
 
   patchApplicationById = async (
     id: number,
     updates: PatchApplicationRequest,
     actorUserId: string,
-    role: string 
+    role: string,
   ): Promise<string> => {
-
     if (Object.keys(updates).length === 0) {
       return this.getApplicationSlugById(id);
     }
@@ -321,19 +369,18 @@ export default class ApplicationService implements IApplicationService {
       throw new HttpError(404, 'Application not found', 'NOT_FOUND');
     }
 
-    //Throws if not admin or the user is messing with another person's app
-    assertOwnershipOrAdmin(actorUserId, current.userId, role)
-
+    assertOwnershipOrAdmin(actorUserId, current.userId, role);
 
     const setPayload: PatchApplicationRequest & { status?: typeof application.status._.data } = {
       ...updates,
     };
 
-    if (current.status === 'CHANGES_REQUESTED' || current.status === 'APPROVED') {
+    // Author edits send the app back for re-review; admin edits are already
+    // reviewed by definition, so they leave the current status untouched.
+    if (role !== 'admin' && (current.status === 'CHANGES_REQUESTED' || current.status === 'APPROVED')) {
       setPayload.status = 'PENDING';
     }
 
-    // Collect replaced S3 keys so they can be deleted after the DB update succeeds.
     const orphanedKeys: Array<string | null | undefined> = [];
 
     if (updates.icon !== undefined && updates.icon !== current.icon) {
@@ -359,9 +406,7 @@ export default class ApplicationService implements IApplicationService {
         .returning({ slug: application.slug });
     } catch (error) {
       const { message, constraint } = getDbErrorMessage(error);
-
       console.error('Database operation failed:', { message, constraint, originalError: error });
-
       throw new HttpError(409, 'Application with this slug already exists', 'DUPLICATE_SLUG');
     }
 
@@ -376,9 +421,6 @@ export default class ApplicationService implements IApplicationService {
     return patched.slug;
   };
 
-  /**
-   * Approve or reject an application (admin action)
-   */
   reviewAdminApplicationById = async (
     id: number,
     input: ReviewApplicationRequest,
@@ -431,8 +473,6 @@ export default class ApplicationService implements IApplicationService {
       })
       .where(eq(application.id, id))
       .returning();
-
-    return;
   };
 
   deleteApplicationById = async (id: number, actorUserId: string): Promise<void> => {
@@ -585,7 +625,6 @@ export default class ApplicationService implements IApplicationService {
     const offset = (page - 1) * limit;
 
     const statusCondition = status ? eq(applicationClaimRequest.status, status) : undefined;
-
     const whereClause = statusCondition ?? sql`1=1`;
 
     const [{ total }] = await this.db
@@ -717,16 +756,6 @@ export default class ApplicationService implements IApplicationService {
     }
 
     return result.slug;
-  };
-
-  private userExists = async (userId: string): Promise<boolean> => {
-    const [result] = await this.db
-      .select({ id: user.id })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-
-    return !!result;
   };
 
 }

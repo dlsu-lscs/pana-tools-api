@@ -27,6 +27,16 @@ export const auth = betterAuth({
           input: true,
           required: false,
         },
+        tosAccepted: {
+          type: 'boolean',
+          input: false,
+          required: false,
+        },
+        tosAcceptedAt: {
+          type: 'date',
+          input: false,
+          required: false,
+        },
       },
     },
   },

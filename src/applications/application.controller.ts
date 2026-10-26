@@ -292,6 +292,22 @@ export class ApplicationController {
   };
 
   /**
+   * Handles POST requests to increment view count for an application by slug
+   * @route POST /api/applications/:slug/view
+   */
+  incrementViewCount = async (req: Request, res: Response): Promise<void> => {
+    const { slug } = ApplicationSlugParamsSchema.parse(req.params);
+
+    logger.debug('Incrementing view count', { slug });
+
+    await this.applicationService.incrementViewCount(slug);
+
+    logger.info('Application view count incremented', { slug });
+
+    res.status(204).send();
+  };
+
+  /**
    * List all claim requests (admin)
    * @route GET /api/applications/admin/claims
    */
