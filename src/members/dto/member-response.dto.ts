@@ -10,6 +10,8 @@ export const MemberResponseSchema = z
     banned: z.boolean().nullable().openapi({ example: false }),
     banReason: z.string().nullable().openapi({ example: null }),
     banExpires: z.string().nullable().openapi({ example: null }),
+    tosAccepted: z.boolean().openapi({ example: true }),
+    tosAcceptedAt: z.date().nullable().openapi({ example: '2025-01-01T00:00:00.000Z' }),
     createdAt: z.date().openapi({ example: '2025-01-01T00:00:00.000Z' }),
     favoritesCount: z.number().int().nonnegative().openapi({ example: 5 }),
     reviewsCount: z.number().int().nonnegative().openapi({ example: 3 }),

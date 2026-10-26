@@ -7,6 +7,9 @@ import { s3 } from '@/shared/infrastructure/s3/client.js';
 import { requireAuth } from '@/shared/middleware/auth.middleware.js';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
 import { S3ImageQuerySchema, S3PresignedUploadQuerySchema } from './dto/index.js';
+import { and, eq, or, sql } from 'drizzle-orm';
+import { application } from '@/shared/infrastructure/database/schema.js';
+import { db } from '@/shared/config/database.js';
 
 const router = Router();
 
@@ -84,6 +87,29 @@ router.delete('/', requireAuth, async (req: Request, res: Response): Promise<voi
   const bucket = process.env.S3_BUCKET;
   if (!bucket) {
     throw new HttpError(500, 'Server misconfigured', 'INTERNAL_ERROR');
+  }
+
+  const actorUserId = res.locals.authUserId as string;
+  const actorRole = res.locals.authUserRole as string;
+
+  if (actorRole !== 'admin') {
+    const [ownedApplication] = await db
+      .select({ id: application.id })
+      .from(application)
+      .where(
+        and(
+          eq(application.userId, actorUserId),
+          or(
+            eq(application.icon, key),
+            sql`${key} = ANY(${application.previewImages})`,
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!ownedApplication) {
+      throw new HttpError(403, 'Forbidden', 'FORBIDDEN');
+    }
   }
 
   const command = new DeleteObjectCommand({

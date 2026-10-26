@@ -86,6 +86,8 @@ export default class MemberService implements IMemberService {
         banned: user.banned,
         banReason: user.banReason,
         banExpires: user.banExpires,
+        tosAccepted: user.tosAccepted,
+        tosAcceptedAt: user.tosAcceptedAt,
         createdAt: user.createdAt,
         favoritesCount: sql<number>`count(distinct ${userFavorite.applicationId})::int`,
         reviewsCount:   sql<number>`count(distinct ${rating.applicationId})::int`,
@@ -205,7 +207,7 @@ export default class MemberService implements IMemberService {
       throw new HttpError(403, 'You cannot demote yourself', 'FORBIDDEN');
     }
     await this.assertUserExists(targetUserId);
-    await this.db.update(user).set({ role: null }).where(eq(user.id, targetUserId));
+    await this.db.update(user).set({ role: 'user' }).where(eq(user.id, targetUserId));
   };
 
   private buildWhereConditions(filters?: MembersListFilters) {
