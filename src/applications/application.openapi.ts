@@ -432,3 +432,54 @@ registry.registerPath({
     },
   },
 });
+
+/**
+ * Reguster the POST /api/applications/{slug}/view endpoint
+ */
+registry.registerPath({
+  method: 'post',
+  path: '/api/applications/{slug}/view',
+  description: 'Increment view count for an approved application by slug (Rate limited to 1 per IP per minute per app)',
+  summary: 'Increment application view count',
+  tags: ['Applications'],
+  request: {
+    params: ApplicationSlugParamsSchema,
+  },
+  responses: {
+    204: {
+      description: 'View count incremented successfully',
+    },
+    400: {
+      description: 'Invalid slug parameter - VALIDATION_ERROR',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    404: {
+      description: 'Application not found - NOT_FOUND',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - RATE_LIMITED',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error - INTERNAL_ERROR',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});

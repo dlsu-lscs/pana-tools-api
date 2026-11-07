@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ApplicationController } from './application.controller.js';
 import ApplicationService from '@/applications/application.service.js';
 import { requireAuth, requireRole } from '@/shared/middleware/auth.middleware.js';
+import { rateLimitViewIncrement } from '@/shared/middleware/rate-limit.middleware.js';
 import { db } from '@/shared/config/database.js';
 
 const router = Router();
@@ -126,10 +127,18 @@ router.post('/:id/claim', requireAuth, applicationController.claimApplication);
 router.get('/:slug/edit', requireAuth, applicationController.getOwnApplicationBySlug);
 
 /**
+ * @route POST /api/applications/:slug/view
+ * @description Increment application view count
+ * @access Public (Rate-limited)
+ */
+router.post('/:slug/view', rateLimitViewIncrement, applicationController.incrementViewCount);
+
+/**
  * @route GET /api/applications/:slug
  * @description Get a single application by slug
  * @access Public
  */
 router.get('/:slug', applicationController.getApplicationBySlug);
+
 
 export default router;

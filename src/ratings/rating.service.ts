@@ -7,9 +7,9 @@ import {
   type ApplicationRatingResponse,
   type RatingResponse,
 } from './dto/index.js';
-import { application, rating, type InsertRating, type SelectRating, user } from './rating.model.js';
-import { SelectApplication } from '@/applications/application.model.js';
-
+import { rating, type InsertRating, type SelectRating } from './rating.model.js';
+import { application, SelectApplication } from '@/applications/application.model.js';
+import { user } from '@/users/user.model.js';
 type RatingWithUserEmail = RatingResponse;
 
 type ApplicationRating = ApplicationRatingResponse;
@@ -100,6 +100,7 @@ export default class RatingService implements IRatingService {
         .where(eq(rating.applicationId, app.id)),
       this.db
         .select({
+          id: rating.id,
           applicationId: rating.applicationId,
           score: rating.score,
           comment: rating.comment,
@@ -154,9 +155,10 @@ export default class RatingService implements IRatingService {
       isAnonymous: payload.isAnonymous ?? false,
     };
 
-    await this.db.insert(rating).values(insertPayload);
+    const [created] = await this.db.insert(rating).values(insertPayload).returning();
 
     return this.formatRating({
+      id: created.id,
       applicationId: app.id,
       score: payload.score,
       comment: payload.comment ?? null,
@@ -207,6 +209,7 @@ export default class RatingService implements IRatingService {
 
     return this.formatRating({
       ...updated,
+      id: existing.id,
       userEmail: owner?.email ?? null,
       userName: owner?.name ?? null,
     });
@@ -241,6 +244,7 @@ export default class RatingService implements IRatingService {
     }
 
     return this.formatRating({
+      id: existing.id,
       applicationId: existing.applicationId,
       score: existing.score,
       comment: existing.comment,
@@ -253,6 +257,7 @@ export default class RatingService implements IRatingService {
   getRatingByUserId = async (userId: string): Promise<RatingWithApplication[]> => {
     const rows = await this.db
       .select({
+        id: rating.id,
         userId: rating.userId,
         applicationId: rating.applicationId,
         score: rating.score,
@@ -267,6 +272,7 @@ export default class RatingService implements IRatingService {
       .where(eq(rating.userId, userId));
 
     return rows.map((row) => ({
+      id: row.id,
       userId: row.isAnonymous ? null : row.userId,
       applicationId: row.applicationId,
       score: row.score,

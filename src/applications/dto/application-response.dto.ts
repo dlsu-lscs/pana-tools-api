@@ -33,6 +33,7 @@ export const ApplicationResponseSchema = z
     favoritesCount: z.number().int().nonnegative().openapi({ example: 12 }),
     ratingCount: z.number().int().nonnegative().openapi({ example: 5 }),
     averageRating: z.number().nullable().openapi({ example: 4.2 }),
+    viewCount: z.number().int().nonnegative().openapi({ example: 42 }),
   })
   .openapi('ApplicationResponse');
 

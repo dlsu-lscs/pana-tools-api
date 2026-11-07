@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import ApplicationService from '../application.service.js';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
-import { application, user } from '../application.model.js';
+import { application } from '../application.model.js';
+import { user } from '@/users/user.model.js';
 import type { InsertApplication } from '../application.model.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { createTestDatabase } from '@/shared/config/test-database.js';
@@ -9,6 +10,7 @@ import { PgliteDatabase } from 'drizzle-orm/pglite';
 import { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { userFavorite } from '@/favorites/favorites.model.js';
+import { rating } from '@/ratings/rating.model.js';
 
 describe('ApplicationService', () => {
   let service: ApplicationService;
@@ -30,12 +32,14 @@ describe('ApplicationService', () => {
         name: 'Application Favorites User',
         email: 'application-favorites-user@example.com',
         emailVerified: true,
+        tosAccepted: true,
       },
       {
         id: otherUserId,
         name: 'Other Application User',
         email: 'other-application-user@example.com',
         emailVerified: true,
+        tosAccepted: true,
       },
     ]);
   });
@@ -282,6 +286,34 @@ describe('ApplicationService', () => {
         code: 'NOT_FOUND',
       });
     });
+
+    it('should throw 403 when user has not accepted TOS', async () => {
+      const noTosUserId = 'no-tos-user';
+      await db.insert(user).values({
+        id: noTosUserId,
+        name: 'No TOS User',
+        email: 'no-tos@example.com',
+        emailVerified: true,
+        tosAccepted: false,
+      });
+
+      const newApp = {
+        slug: 'tos-blocked-app',
+        title: 'TOS Blocked',
+        description: 'Should fail because TOS not accepted',
+        url: 'https://example.com/tos-blocked',
+        githubLink: 'https://github.com/test/test-app',
+        tags: [],
+      };
+
+      await expect(service.createApplication(newApp, noTosUserId)).rejects.toMatchObject({
+        statusCode: 403,
+        code: 'TOS_NOT_ACCEPTED',
+      });
+
+      // Cleanup
+      await db.delete(user).where(eq(user.id, noTosUserId));
+    });
   });
 
   describe('deleteApplicationById', () => {
@@ -455,9 +487,10 @@ describe('ApplicationService', () => {
 
       await service.patchApplicationById(app.id, { title: 'New Title' }, testUserId, "user");
 
-      const result = await service.getApplicationBySlug(app.slug);
+      const result = await service.getOwnApplicationBySlug(app.slug, testUserId);
 
       expect(result.title).toBe('New Title');
+      expect(result.status).toBe('PENDING');
 
       // Verify in DB
       const [inDb] = await db.select().from(application).where(eq(application.id, app.id));
@@ -490,7 +523,7 @@ describe('ApplicationService', () => {
 
       await service.patchApplicationById(app.id, { slug: 'my-slug', title: 'New' }, testUserId, "user");
 
-      const result = await service.getApplicationBySlug('my-slug');
+      const result = await service.getOwnApplicationBySlug('my-slug', testUserId);
 
       expect(result.title).toBe('New');
       expect(result.slug).toBe('my-slug');
@@ -501,10 +534,38 @@ describe('ApplicationService', () => {
 
       await service.patchApplicationById(app.id, { description: 'New Desc' }, testUserId, "user");
 
-      const result = await service.getApplicationBySlug(app.slug);
+      const result = await service.getOwnApplicationBySlug(app.slug, testUserId);
 
       expect(result.description).toBe('New Desc');
       expect(result.title).toBe('Title');
+    });
+
+    it('should reset an approved app to PENDING when the author edits it', async () => {
+      const app = await createTestApp({ status: 'APPROVED', title: 'Old' });
+
+      await service.patchApplicationById(app.id, { title: 'New' }, testUserId, "user");
+
+      const [inDb] = await db.select().from(application).where(eq(application.id, app.id));
+      expect(inDb.status).toBe('PENDING');
+    });
+
+    it('should keep an approved app APPROVED when an admin edits it', async () => {
+      const app = await createTestApp({ status: 'APPROVED', title: 'Old' });
+
+      await service.patchApplicationById(app.id, { title: 'New' }, otherUserId, "admin");
+
+      const [inDb] = await db.select().from(application).where(eq(application.id, app.id));
+      expect(inDb.title).toBe('New');
+      expect(inDb.status).toBe('APPROVED');
+    });
+
+    it('should keep a CHANGES_REQUESTED app unchanged when an admin edits it', async () => {
+      const app = await createTestApp({ status: 'CHANGES_REQUESTED', title: 'Old' });
+
+      await service.patchApplicationById(app.id, { title: 'New' }, otherUserId, "admin");
+
+      const [inDb] = await db.select().from(application).where(eq(application.id, app.id));
+      expect(inDb.status).toBe('CHANGES_REQUESTED');
     });
 
     it("should throw 403 when updating another user's application", async () => {
@@ -527,6 +588,108 @@ describe('ApplicationService', () => {
 
       expect(result.id).toBe(app.id);
       expect(result.title).toBe('Title');
+    });
+  });
+
+  describe('Popularity-Based Sorting', () => {
+    it('should sort applications by viewCount ascending and descending', async () => {
+      const app1 = await createTestApp({ slug: 'views-1', viewCount: 10 });
+      const app2 = await createTestApp({ slug: 'views-2', viewCount: 50 });
+      const app3 = await createTestApp({ slug: 'views-3', viewCount: 5 });
+
+      const descResult = await service.getPaginatedApplications(10, 1, {
+        sortBy: 'viewCount',
+        sortOrder: 'desc',
+      });
+      expect(descResult.data.map((a) => a.slug)).toEqual([app2.slug, app1.slug, app3.slug]);
+
+      const ascResult = await service.getPaginatedApplications(10, 1, {
+        sortBy: 'viewCount',
+        sortOrder: 'asc',
+      });
+      expect(ascResult.data.map((a) => a.slug)).toEqual([app3.slug, app1.slug, app2.slug]);
+    });
+
+    it('should sort applications by favoritesCount', async () => {
+      const app1 = await createTestApp({ slug: 'favs-1' });
+      const app2 = await createTestApp({ slug: 'favs-2' });
+
+      // app2 gets 2 favorites, app1 gets 1 favorite
+      await db.insert(userFavorite).values([
+        { userId: testUserId, applicationId: app1.id },
+        { userId: testUserId, applicationId: app2.id },
+        { userId: otherUserId, applicationId: app2.id },
+      ]);
+
+      const descResult = await service.getPaginatedApplications(10, 1, {
+        sortBy: 'favoritesCount',
+        sortOrder: 'desc',
+      });
+      expect(descResult.data[0].slug).toBe(app2.slug);
+      expect(descResult.data[1].slug).toBe(app1.slug);
+
+      const ascResult = await service.getPaginatedApplications(10, 1, {
+        sortBy: 'favoritesCount',
+        sortOrder: 'asc',
+      });
+      expect(ascResult.data[0].slug).toBe(app1.slug);
+      expect(ascResult.data[1].slug).toBe(app2.slug);
+    });
+
+    it('should sort applications by ratingCount and averageRating', async () => {
+      const app1 = await createTestApp({ slug: 'rating-1' });
+      const app2 = await createTestApp({ slug: 'rating-2' });
+
+      // app1: score 5.0 (1 rating)
+      // app2: score 3.0, 4.0 -> average 3.5 (2 ratings)
+      await db.insert(rating).values([
+        { userId: testUserId, applicationId: app1.id, score: 5.0 },
+        { userId: testUserId, applicationId: app2.id, score: 3.0 },
+        { userId: otherUserId, applicationId: app2.id, score: 4.0 },
+      ]);
+
+      const ratingCountDesc = await service.getPaginatedApplications(10, 1, {
+        sortBy: 'ratingCount',
+        sortOrder: 'desc',
+      });
+      expect(ratingCountDesc.data[0].slug).toBe(app2.slug);
+
+      const avgRatingDesc = await service.getPaginatedApplications(10, 1, {
+        sortBy: 'averageRating',
+        sortOrder: 'desc',
+      });
+      expect(avgRatingDesc.data[0].slug).toBe(app1.slug);
+    });
+  });
+
+  describe('incrementViewCount', () => {
+    it('should increment view count by 1 for approved applications', async () => {
+      const app = await createTestApp({ slug: 'view-target', viewCount: 0 });
+
+      await service.incrementViewCount(app.slug);
+
+      const updated = await service.getApplicationBySlug(app.slug);
+      expect(updated.viewCount).toBe(1);
+
+      await service.incrementViewCount(app.slug);
+      const updatedAgain = await service.getApplicationBySlug(app.slug);
+      expect(updatedAgain.viewCount).toBe(2);
+    });
+
+    it('should throw 404 when incrementing views for non-existent app', async () => {
+      await expect(service.incrementViewCount('non-existent-app')).rejects.toMatchObject({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+      });
+    });
+
+    it('should throw 404 when application is not approved', async () => {
+      const pendingApp = await createTestApp({ slug: 'pending-view-app', status: 'PENDING' });
+
+      await expect(service.incrementViewCount(pendingApp.slug)).rejects.toMatchObject({
+        statusCode: 404,
+        code: 'NOT_FOUND',
+      });
     });
   });
 });
