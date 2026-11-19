@@ -25,7 +25,9 @@ import feedbackRoutes from './feedback/feedback.routes.js';
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 
-app.set('trust proxy', true);
+// Trust exactly one proxy hop (the reverse proxy in front of the API). `true` would trust any
+// client-supplied X-Forwarded-For value, letting callers spoof req.ip and bypass IP rate limits.
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(express.json());
