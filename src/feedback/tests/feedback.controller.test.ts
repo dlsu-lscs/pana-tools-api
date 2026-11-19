@@ -32,6 +32,7 @@ describe('FeedbackController & Middlewares', () => {
     userId: null,
     email: 'visitor@example.com',
     category: 'bug' as const,
+    status: 'unresolved' as const,
     message: 'Encountered unexpected validation failure on submission.',
     createdAt: mockDate,
     updatedAt: mockDate,
@@ -48,7 +49,9 @@ describe('FeedbackController & Middlewares', () => {
         total: 1,
         page: 1,
         limit: 20,
+        statusCounts: { unresolved: 1, pending: 0, resolved: 0 },
       }),
+      updateFeedback: vi.fn().mockResolvedValue({ ...mockFeedbackItem, status: 'resolved' }),
       deleteFeedback: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -209,6 +212,38 @@ describe('FeedbackController & Middlewares', () => {
           limit: 20,
         }),
       );
+    });
+  });
+
+  describe('updateFeedbackAdmin', () => {
+    it('should update status and return the updated feedback', async () => {
+      mockRequest.params = { id: mockFeedbackItem.id };
+      mockRequest.body = { status: 'resolved' };
+
+      await controller.updateFeedbackAdmin(mockRequest as Request, mockResponse as Response);
+
+      expect(mockService.updateFeedback).toHaveBeenCalledWith(mockFeedbackItem.id, { status: 'resolved' });
+      expect(responseStatus).toHaveBeenCalledWith(200);
+      expect(responseJson).toHaveBeenCalledWith(expect.objectContaining({ status: 'resolved' }));
+    });
+
+    it('should reject an empty update body', async () => {
+      mockRequest.params = { id: mockFeedbackItem.id };
+      mockRequest.body = {};
+
+      await expect(
+        controller.updateFeedbackAdmin(mockRequest as Request, mockResponse as Response),
+      ).rejects.toBeInstanceOf(ZodError);
+      expect(mockService.updateFeedback).not.toHaveBeenCalled();
+    });
+
+    it('should reject an invalid status value', async () => {
+      mockRequest.params = { id: mockFeedbackItem.id };
+      mockRequest.body = { status: 'archived' };
+
+      await expect(
+        controller.updateFeedbackAdmin(mockRequest as Request, mockResponse as Response),
+      ).rejects.toBeInstanceOf(ZodError);
     });
   });
 

@@ -19,11 +19,10 @@ export const feedbackCategory = pgEnum('feedback_category', [
   'improvement',
 ]);
 
-export const feedbackSortOptions = pgEnum('feedback_sort_options', [
-  'createdAt',
-  'category',
-  'email',
-]);
+export const feedbackStatus = pgEnum('feedback_status', ['unresolved', 'pending', 'resolved']);
+
+// Plain tuple (not a pgEnum) — only used for query validation, never stored.
+export const feedbackSortOptions = ['createdAt', 'category', 'email'] as const;
 
 export const feedback = pgTable(
   'feedback',
@@ -34,6 +33,7 @@ export const feedback = pgTable(
     userId: text('user_id'),
     email: text(),
     category: feedbackCategory().notNull(),
+    status: feedbackStatus().notNull().default('unresolved'),
     message: text().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -44,6 +44,7 @@ export const feedback = pgTable(
   (table) => [
     index('feedback_user_id_idx').on(table.userId),
     index('feedback_category_idx').on(table.category),
+    index('feedback_status_idx').on(table.status),
 
     foreignKey({
       columns: [table.userId],

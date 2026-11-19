@@ -12,6 +12,7 @@ const feedbackController = new FeedbackController(feedbackService);
 
 router.post('/', rateLimitFeedback, feedbackController.createFeedback);
 router.get('/admin', requireAuth, requireRole('admin'), feedbackController.getFeedbackAdmin);
+router.patch('/admin/:id', requireAuth, requireRole('admin'), feedbackController.updateFeedbackAdmin);
 router.delete('/admin/:id', requireAuth, requireRole('admin'), feedbackController.deleteFeedbackAdmin);
 
 export default router;

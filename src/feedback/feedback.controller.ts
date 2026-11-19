@@ -4,6 +4,7 @@ import { getSession } from '@/shared/middleware/auth.middleware.js';
 import type { IFeedbackService } from './feedback.service.js';
 import {
   CreateFeedbackRequestSchema,
+  UpdateFeedbackRequestSchema,
   FeedbackListQuerySchema,
   FeedbackParamsSchema,
   FeedbackResponseSchema,
@@ -65,12 +66,30 @@ export default class FeedbackController {
       total: result.total,
       page: result.page,
       limit: result.limit,
+      statusCounts: result.statusCounts,
     });
 
     logger.info('Admin feedback retrieved successfully', {
       total: validatedResponse.total,
       page: validatedResponse.page,
     });
+
+    res.status(200).json(validatedResponse);
+  };
+
+  /**
+   * Updates the triage status and/or category of a feedback record (admin only).
+   */
+  updateFeedbackAdmin = async (req: Request, res: Response): Promise<void> => {
+    const params = FeedbackParamsSchema.parse(req.params);
+    const body = UpdateFeedbackRequestSchema.parse(req.body);
+
+    logger.debug('Updating feedback by admin', { feedbackId: params.id, changes: body });
+
+    const updated = await this.feedbackService.updateFeedback(params.id, body);
+    const validatedResponse = FeedbackResponseSchema.parse(updated);
+
+    logger.info('Feedback updated successfully', { feedbackId: params.id });
 
     res.status(200).json(validatedResponse);
   };

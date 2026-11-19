@@ -185,6 +185,68 @@ describe('FeedbackService', () => {
     });
   });
 
+  describe('status triage', () => {
+    it('should default new feedback to unresolved', async () => {
+      const created = await service.createFeedback({
+        category: 'bug',
+        message: 'Default status should be unresolved.',
+      });
+
+      expect(created.status).toBe('unresolved');
+    });
+
+    it('should update status and category', async () => {
+      const created = await service.createFeedback({
+        category: 'bug',
+        message: 'This is actually a feature request.',
+      });
+
+      const updated = await service.updateFeedback(created.id, {
+        status: 'resolved',
+        category: 'feature_request',
+      });
+
+      expect(updated.status).toBe('resolved');
+      expect(updated.category).toBe('feature_request');
+      expect((await service.getFeedback(created.id)).status).toBe('resolved');
+    });
+
+    it('should only change the provided field', async () => {
+      const created = await service.createFeedback({
+        category: 'improvement',
+        message: 'Only the status should change here.',
+      });
+
+      const updated = await service.updateFeedback(created.id, { status: 'pending' });
+
+      expect(updated.status).toBe('pending');
+      expect(updated.category).toBe('improvement');
+    });
+
+    it('should throw 404 when updating nonexistent feedback', async () => {
+      await expect(
+        service.updateFeedback('nonexistent-feedback-id', { status: 'resolved' }),
+      ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+    });
+
+    it('should filter by status and return counts across all statuses', async () => {
+      const a = await service.createFeedback({ category: 'bug', message: 'First unresolved item.' });
+      const b = await service.createFeedback({ category: 'bug', message: 'Second item, resolved.' });
+      await service.createFeedback({ category: 'general', message: 'Third item, unresolved.' });
+      await service.updateFeedback(b.id, { status: 'resolved' });
+
+      const result = await service.listFeedback({ status: 'resolved' });
+
+      expect(result.data.map((f) => f.id)).toEqual([b.id]);
+      expect(result.total).toBe(1);
+      expect(result.statusCounts).toEqual({ unresolved: 2, pending: 0, resolved: 1 });
+
+      const bugsOnly = await service.listFeedback({ category: 'bug' });
+      expect(bugsOnly.statusCounts).toEqual({ unresolved: 1, pending: 0, resolved: 1 });
+      expect(bugsOnly.data.map((f) => f.id)).toContain(a.id);
+    });
+  });
+
   describe('deleteFeedback', () => {
     it('should delete existing feedback record', async () => {
       const created = await service.createFeedback({

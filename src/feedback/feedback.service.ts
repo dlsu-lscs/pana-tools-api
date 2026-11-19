@@ -4,16 +4,29 @@ import { and, eq, SQL, or, ilike, count, asc, desc } from 'drizzle-orm';
 import { HttpError } from '@/shared/middleware/error.middleware.js';
 import {
   feedback,
+  feedbackStatus,
   type InsertFeedback,
   type SelectFeedback,
 } from './feedback.model.js';
 import { type FeedbackListInput } from './dto/feedback-list-query.dto.js';
+import { type UpdateFeedbackRequest } from './dto/update-feedback-request.dto.js';
 import { user } from '@/users/user.model.js';
+
+export type FeedbackStatusCounts = Record<SelectFeedback['status'], number>;
+
+export interface FeedbackListResult {
+  data: SelectFeedback[];
+  total: number;
+  page: number;
+  limit: number;
+  statusCounts: FeedbackStatusCounts;
+}
 
 export interface IFeedbackService {
   createFeedback(feedback: InsertFeedback, userId?: string): Promise<SelectFeedback>;
   getFeedback(feedbackId: string): Promise<SelectFeedback>;
-  listFeedback(query: FeedbackListInput): Promise<{ data: SelectFeedback[]; total: number; page: number; limit: number }>;
+  listFeedback(query: FeedbackListInput): Promise<FeedbackListResult>;
+  updateFeedback(feedbackId: string, changes: UpdateFeedbackRequest): Promise<SelectFeedback>;
   deleteFeedback(feedbackId: string): Promise<void>;
 }
 
@@ -88,9 +101,7 @@ export default class FeedbackService implements IFeedbackService {
    * Lists feedback entries with pagination and category filtering, ordering by createdAt descending
    * by default to satisfy admin requirements for newest-first chronological presentation.
    */
-  listFeedback = async (
-    query: FeedbackListInput,
-  ): Promise<{ data: SelectFeedback[]; total: number; page: number; limit: number }> => {
+  listFeedback = async (query: FeedbackListInput): Promise<FeedbackListResult> => {
     const conditions: SQL[] = [];
 
     if (query.category) {
@@ -111,6 +122,13 @@ export default class FeedbackService implements IFeedbackService {
       );
     }
 
+    // statusCounts ignore the status filter so the tab counts stay stable while switching tabs.
+    const countsWhereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    if (query.status) {
+      conditions.push(eq(feedback.status, query.status));
+    }
+
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const page = Number(query.page ?? 1);
     const limit = Number(query.limit ?? 20);
@@ -119,7 +137,7 @@ export default class FeedbackService implements IFeedbackService {
     const sortField = query.sortBy ? feedback[query.sortBy] : feedback.createdAt;
     const sortOrderFn = query.sortOrder === 'asc' ? asc : desc;
 
-    const [items, countResult] = await Promise.all([
+    const [items, countResult, statusRows] = await Promise.all([
       this.db
         .select()
         .from(feedback)
@@ -132,7 +150,20 @@ export default class FeedbackService implements IFeedbackService {
         .select({ count: count() })
         .from(feedback)
         .where(whereClause),
+
+      this.db
+        .select({ status: feedback.status, count: count() })
+        .from(feedback)
+        .where(countsWhereClause)
+        .groupBy(feedback.status),
     ]);
+
+    const statusCounts = Object.fromEntries(
+      feedbackStatus.enumValues.map((s) => [s, 0]),
+    ) as FeedbackStatusCounts;
+    for (const row of statusRows) {
+      statusCounts[row.status] = Number(row.count);
+    }
 
     const totalCount = countResult[0]?.count ?? 0;
 
@@ -141,7 +172,32 @@ export default class FeedbackService implements IFeedbackService {
       total: Number(totalCount),
       page,
       limit,
+      statusCounts,
     };
+  };
+
+  /**
+   * Updates the triage status and/or category of a feedback record, throwing a 404 HttpError
+   * if the target feedback does not exist.
+   */
+  updateFeedback = async (
+    feedbackId: string,
+    changes: UpdateFeedbackRequest,
+  ): Promise<SelectFeedback> => {
+    const [updated] = await this.db
+      .update(feedback)
+      .set({
+        ...(changes.status !== undefined && { status: changes.status }),
+        ...(changes.category !== undefined && { category: changes.category }),
+      })
+      .where(eq(feedback.id, feedbackId))
+      .returning();
+
+    if (!updated) {
+      throw new HttpError(404, 'Feedback not found', 'NOT_FOUND');
+    }
+
+    return updated;
   };
 
   /**

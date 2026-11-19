@@ -1,6 +1,7 @@
 import { ErrorResponseSchema, registry } from '@/shared/config/openapi.js';
 import {
   CreateFeedbackRequestSchema,
+  UpdateFeedbackRequestSchema,
   FeedbackListQuerySchema,
   FeedbackParamsSchema,
   FeedbackResponseSchema,
@@ -12,6 +13,7 @@ const authenticatedUserSecurity: Array<Record<string, string[]>> = [
 ];
 
 registry.register('CreateFeedbackRequest', CreateFeedbackRequestSchema);
+registry.register('UpdateFeedbackRequest', UpdateFeedbackRequestSchema);
 registry.register('FeedbackListQuery', FeedbackListQuerySchema);
 registry.register('FeedbackParams', FeedbackParamsSchema);
 registry.register('FeedbackResponse', FeedbackResponseSchema);
@@ -110,6 +112,47 @@ registry.registerPath({
           schema: ErrorResponseSchema,
         },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/api/feedback/admin/{id}',
+  description: 'Update the triage status and/or category of a feedback entry (Admin only)',
+  summary: 'Update feedback',
+  security: authenticatedUserSecurity,
+  tags: ['Feedback'],
+  request: {
+    params: FeedbackParamsSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateFeedbackRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Successfully updated feedback',
+      content: { 'application/json': { schema: FeedbackResponseSchema } },
+    },
+    400: {
+      description: 'Validation error - VALIDATION_ERROR',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    401: {
+      description: 'Unauthorized - UNAUTHORIZED',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    403: {
+      description: 'Forbidden - Admin only - FORBIDDEN',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Feedback not found - NOT_FOUND',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
